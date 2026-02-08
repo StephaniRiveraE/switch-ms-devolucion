@@ -31,9 +31,8 @@ public class SolicitudDevolucion {
     @Column(name = "fechasolicitud", nullable = false)
     private OffsetDateTime fechaSolicitud;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "codigomotivo", referencedColumnName = "codigo", insertable = false, updatable = false)
-    private CatalogoError motivo;
+    // Relación eliminada para evitar dependencia de tabla CatalogoError
+    // private CatalogoError motivo;
 
     // Código de referencia bancario de 6 dígitos para buscar transacción original
     @Column(name = "codigoReferencia", length = 6)
