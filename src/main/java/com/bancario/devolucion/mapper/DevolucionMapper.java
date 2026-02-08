@@ -19,7 +19,8 @@ public class DevolucionMapper {
                 .id(entity.getId())
                 .idInstruccionOriginal(entity.getIdInstruccionOriginal())
                 .codigoMotivo(entity.getCodigoMotivo())
-                .descripcionMotivo(entity.getMotivo() != null ? entity.getMotivo().getDescripcion() : null)
+                .descripcionMotivo(entity.getDescripcionMotivo() != null ? entity.getDescripcionMotivo()
+                        : (entity.getMotivo() != null ? entity.getMotivo().getDescripcion() : null))
                 .estado(entity.getEstado())
                 .fechaSolicitud(entity.getFechaSolicitud())
                 .build();

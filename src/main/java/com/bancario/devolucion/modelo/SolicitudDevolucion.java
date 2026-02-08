@@ -25,6 +25,9 @@ public class SolicitudDevolucion {
     @Column(name = "estado", nullable = false, length = 20)
     private String estado;
 
+    @Column(name = "descripcionMotivo", columnDefinition = "TEXT")
+    private String descripcionMotivo;
+
     @Column(name = "fechasolicitud", nullable = false)
     private OffsetDateTime fechaSolicitud;
 
