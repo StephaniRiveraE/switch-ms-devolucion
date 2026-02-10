@@ -1,4 +1,9 @@
-name: "Deploy to EKS (Auto)"
+# ============================================================================
+# WORKFLOW DE DEPLOY - switch-ms-devolucion
+# Copia este archivo a: .github/workflows/deploy-eks-devolucion.yml
+# en el repositorio de switch-ms-devolucion
+# ============================================================================
+name: "Deploy switch-ms-devolucion to EKS"
 
 on:
   push:
@@ -7,12 +12,14 @@ on:
 env:
   AWS_REGION: us-east-2
   EKS_CLUSTER: eks-banca-ecosistema
-  
-  # CONFIGURACIÓN: MS-DEVOLUCIÓN
   NAMESPACE: switch
   ECR_REPO: switch-ms-devolucion
   SERVICE_NAME: switch-ms-devolucion
   CONTAINER_PORT: "8085"
+  SECRET_NAME: "switch-db-credentials"
+  SECRET_KEY_URL: "devolucion-url"
+  SECRET_KEY_USER: "devolucion-username"
+  SECRET_KEY_PASS: "devolucion-password"
 
 jobs:
   build-and-deploy:
@@ -70,9 +77,11 @@ jobs:
             namespace: ${{ env.NAMESPACE }}
             labels:
               app: ${{ env.SERVICE_NAME }}
-              component: devolucion
+              bank: ${{ env.NAMESPACE }}
           spec:
             replicas: 1
+            strategy:
+              type: Recreate
             selector:
               matchLabels:
                 app: ${{ env.SERVICE_NAME }}
@@ -80,6 +89,7 @@ jobs:
               metadata:
                 labels:
                   app: ${{ env.SERVICE_NAME }}
+                  bank: ${{ env.NAMESPACE }}
               spec:
                 containers:
                   - name: ${{ env.SERVICE_NAME }}
@@ -94,39 +104,41 @@ jobs:
                         memory: "1Gi"
                         cpu: "500m"
                     env:
-                      - name: SERVER_PORT
-                        value: "${{ env.CONTAINER_PORT }}"
                       - name: SPRING_PROFILES_ACTIVE
                         value: "prod"
                       - name: SPRING_DATASOURCE_URL
                         valueFrom:
                           secretKeyRef:
-                            name: switch-db-credentials
-                            key: devolucion-url
+                            name: ${{ env.SECRET_NAME }}
+                            key: ${{ env.SECRET_KEY_URL }}
                       - name: SPRING_DATASOURCE_USERNAME
                         valueFrom:
                           secretKeyRef:
-                            name: switch-db-credentials
-                            key: devolucion-username
+                            name: ${{ env.SECRET_NAME }}
+                            key: ${{ env.SECRET_KEY_USER }}
                       - name: SPRING_DATASOURCE_PASSWORD
                         valueFrom:
                           secretKeyRef:
-                            name: switch-db-credentials
-                            key: devolucion-password
+                            name: ${{ env.SECRET_NAME }}
+                            key: ${{ env.SECRET_KEY_PASS }}
+                      - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+                        value: "update"
                     livenessProbe:
                       httpGet:
                         path: /actuator/health/liveness
                         port: ${{ env.CONTAINER_PORT }}
-                      initialDelaySeconds: 90
+                      initialDelaySeconds: 120
                       periodSeconds: 10
-                      failureThreshold: 3
+                      timeoutSeconds: 5
+                      failureThreshold: 5
                     readinessProbe:
                       httpGet:
                         path: /actuator/health/readiness
                         port: ${{ env.CONTAINER_PORT }}
-                      initialDelaySeconds: 60
-                      periodSeconds: 5
-                      failureThreshold: 3
+                      initialDelaySeconds: 180
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 10
           ---
           apiVersion: v1
           kind: Service
@@ -145,8 +157,23 @@ jobs:
       
       - name: Esperar Rollout
         run: |
-          echo "⏳ Esperando deployment..."
+          echo "⏳ Esperando que el deployment esté listo..."
           kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
             -n ${{ env.NAMESPACE }} --timeout=300s
+          
           echo "✅ Deploy completado!"
           kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.SERVICE_NAME }}
+
+      - name: Reporte de Error (si falla)
+        if: failure()
+        run: |
+          echo "❌ EL DESPLIEGUE FALLÓ - REPORTE DE ERRORES:"
+          echo "=========================================="
+          echo "1. ESTADO DE LOS PODS:"
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.SERVICE_NAME }} -o wide
+          echo ""
+          echo "2. EVENTOS RECIENTES:"
+          kubectl describe pod -n ${{ env.NAMESPACE }} -l app=${{ env.SERVICE_NAME }} | tail -20
+          echo ""
+          echo "3. LOGS DE APLICACIÓN:"
+          kubectl logs -n ${{ env.NAMESPACE }} -l app=${{ env.SERVICE_NAME }} --tail=50
